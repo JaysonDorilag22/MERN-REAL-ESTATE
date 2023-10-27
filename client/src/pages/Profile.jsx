@@ -1,7 +1,23 @@
 import { useSelector } from "react-redux";
 import { useRef, useState, useEffect } from "react";
-import { getDownloadURL, getStorage, ref, uploadBytesResumable } from "firebase/storage";
+import {
+  getDownloadURL,
+  getStorage,
+  ref,
+  uploadBytesResumable,
+} from "firebase/storage";
 import { app } from "../firebase";
+import {
+  updateUserStart,
+  updateUserSuccess,
+  updateUserFailure,
+  deleteUserFailure,
+  deleteUserStart,
+  deleteUserSuccess,
+  // signOutUserStart,
+} from '../redux/user/userSlice';
+import { useDispatch } from 'react-redux';
+
 
 export default function Profile() {
   const fileRef = useRef(null);
@@ -10,7 +26,10 @@ export default function Profile() {
   const [filePerc, setFilePerc] = useState(0);
   const [fileUploadError, setFileUploadError] = useState(false);
   const [formData, setFormData] = useState({});
-  console.log(formData);
+  const [updateSuccess, setUpdateSuccess] = useState(false);
+  const [showListingsError, setShowListingsError] = useState(false);
+  const [userListings, setUserListings] = useState([]);
+  const dispatch = useDispatch();
 
 
   useEffect(() => {
@@ -25,20 +44,40 @@ export default function Profile() {
     const storageRef = ref(storage, fileName);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
-    uploadTask.on("state_changed", (snapshot) => {
-      const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-      setFilePerc(Math.round(progress));
-    },
-    (error) => {
-      setFileUploadError(true);
-    },
-    () => {
-      getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) =>
-        setFormData({ ...formData, avatar: downloadURL })
-      );
+    uploadTask.on(
+      "state_changed",
+      (snapshot) => {
+        const progress =
+          (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setFilePerc(Math.round(progress));
+      },
+      (error) => {
+        setFileUploadError(true);
+      },
+      () => {
+        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) =>
+          setFormData({ ...formData, avatar: downloadURL })
+        );
+      }
+    );
+  };
+
+  const handleDeleteUser = async () => {
+    try {
+      dispatch(deleteUserStart());
+      const res = await fetch(`/api/user/delete/${currentUser._id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (data.success === false) {
+        dispatch(deleteUserFailure(data.message));
+        return;
+      }
+      dispatch(deleteUserSuccess(data));
+    } catch (error) {
+      dispatch(deleteUserFailure(error.message));
     }
-  );
-};
+  };
 
   return (
     <div className="p-3 max-w-lg mx-auto">
@@ -54,20 +93,20 @@ export default function Profile() {
         <img
           onClick={() => fileRef.current.click()}
           src={formData.avatar || currentUser.avatar}
-          alt='profile'
-          className='rounded-full h-24 w-24 object-cover cursor-pointer self-center mt-2'
+          alt="profile"
+          className="rounded-full h-24 w-24 object-cover cursor-pointer self-center mt-2"
         />
-        <p className='text-sm self-center'>
+        <p className="text-sm self-center">
           {fileUploadError ? (
-            <span className='text-red-700'>
+            <span className="text-red-700">
               Error Image upload (image must be less than 2 mb)
             </span>
           ) : filePerc > 0 && filePerc < 100 ? (
-            <span className='text-blue-700'>{`Uploading ${filePerc}%`}</span>
+            <span className="text-blue-700">{`Uploading ${filePerc}%`}</span>
           ) : filePerc === 100 ? (
-            <span className='text-green-700'>Image successfully uploaded!</span>
+            <span className="text-green-700">Image successfully uploaded!</span>
           ) : (
-            ''
+            ""
           )}
         </p>
         <input
@@ -85,12 +124,17 @@ export default function Profile() {
           placeholder="password"
           className="border p-3 rounded-lg id='password"
         />
-        <button className="bg-blue-700 text-white rounded-lg p-3 uppercase hover:opacity-95 disabled:opacity-80">
+        <button className="bg-slate-700  text-white rounded-lg p-3 uppercase hover:opacity-95 disabled:opacity-80">
           Update
         </button>
       </form>
       <div className="flex justify-between mt-5">
-        <span className="text-red-700 cursor-pointer">Delete account</span>
+        <span
+          onClick={handleDeleteUser}
+          className="text-red-700 cursor-pointer"
+        >
+          Delete account
+        </span>
         <span className="text-red-700 cursor-pointer">Sign out</span>
       </div>
     </div>
